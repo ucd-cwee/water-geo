@@ -18,14 +18,13 @@ cal_water_sa <- st_read("data/water_service_areas/service_areas_valid.shp")
 
 # SCE & SDGE -------------------------------------------------------------------
 sce_sdge <- cal_elec_sa %>%
-  filter(Name %in% c("San Diego Gas & Electric", "Southern California Edison"))
+  filter(Name %in% c("San Diego Gas & Electric", "Southern California Edison")) %>% 
+  select(elec_name = Name, acronym = Acronym, category = Category)
 
 sce_sdge_water <- cal_water_sa %>% 
   filter(map_lgl(st_intersects(., sce_sdge), ~ length(.x) != 0))
 
-sce_sdge_water_summary <- sce_sdge %>% 
-  select(elec_name = Name) %>% 
-  st_intersection(sce_sdge_water) %>% 
+sce_sdge_water_summary <- st_intersection(sce_sdge, sce_sdge_water) %>% 
   group_by(elec_name, pwsid, pws_name = name) %>% 
   summarise() %>% 
   ungroup() %>% 
