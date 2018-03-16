@@ -3,6 +3,8 @@ library(tidyverse)
 library(httr)
 library(sf)
 library(units)
+library(withr)
+library(fs)
 
 # download data ----------------------------------------------------------------
 
@@ -14,18 +16,27 @@ cal_elec_sa <- st_read("https://opendata.arcgis.com/datasets/800f1e68396f447396a
 source("src/get_data/cal_water_service_areas.R")
 cal_water_sa <- st_read("data/water_service_areas/service_areas_valid.shp")
 
-# spatial intersection ---------------------------------------------------------
-elec_water_sa <- cal_elec_sa %>% 
+# SCE & SDGE -------------------------------------------------------------------
+sce_sdge <- cal_elec_sa %>%
+  filter(Name %in% c("San Diego Gas & Electric", "Southern California Edison"))
+
+sce_sdge_water <- cal_water_sa %>% 
+  filter(map_lgl(st_intersects(., sce_sdge), ~ length(.x) != 0))
+
+sce_sdge_water_summary <- sce_sdge %>% 
   select(elec_name = Name) %>% 
-  st_intersection(cal_water_sa) %>% 
+  st_intersection(sce_sdge_water) %>% 
   group_by(elec_name, pwsid, pws_name = name) %>% 
   summarise() %>% 
   ungroup() %>% 
-  mutate(sq_km = set_units(st_area(geometry), km^2))
-
-# save SCE & SDGE list ---------------------------------------------------------
-elec_water_sa_sub <- elec_water_sa %>%
-  filter(elec_name %in% c("San Diego Gas & Electric", "Southern California Edison")) %>% 
+  mutate(sq_km = set_units(st_area(geometry), km^2)) %>% 
   st_set_geometry(NULL)
 
-write_csv(elec_water_sa_sub, "data/elec_water_sa_sub.csv")
+# save shp & csv
+shp_dir <- "data/sce_sdge_water"
+if (!dir_exists(shp_dir)) dir_create(shp_dir)
+st_write(sce_sdge, path(shp_dir, "sce_sdge.shp"), delete_layer = TRUE)
+st_write(sce_sdge_water, path(shp_dir, "sce_sdge_water.shp"), delete_layer = TRUE)
+with_dir("data/sce_sdge_water", zip("../sce_sdge_water.zip", dir_ls()))
+
+write_csv(sce_sdge_water_summary, "data/sce_sdge_water_summary.csv")
